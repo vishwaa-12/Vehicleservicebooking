@@ -1,0 +1,33 @@
+{
+    "name": "vehicle-service-backend",
+    "version": "1.0.0",
+    "description": "Backend for Vehicle Service Booking System",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "server": "nodemon server.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "vehicle",
+        "service",
+        "booking",
+        "node",
+        "express"
+    ],
+    "author": "Your Name",
+    "license": "ISC",
+    "dependencies": {
+        "bcryptjs": "^2.4.3",
+        "cors": "^2.8.5",
+        "dotenv": "^16.5.0",
+        "express": "^4.18.2",
+        "mongoose": "^7.6.5",
+        "nodemailer": "^6.10.1",
+        "twilio": "^4.11.0",
+        "vehicle-service-backend": "file:"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.2"
+    }
+}
