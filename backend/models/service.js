@@ -1,18 +1,31 @@
+// models/Service.js
 const mongoose = require('mongoose');
 
 const ServiceSchema = new mongoose.Schema({
-  vehicleId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vehicle',
-    required: true
-  },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  serviceType: {
+  vehicleId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Vehicle'
+  },
+  vehicleType: {
     type: String,
+    required: true,
+    enum: ['two-wheeler', 'four-wheeler', 'others']
+  },
+  vehicleNumber: {
+    type: String,
+    required: true
+  },
+  vehicleName: {
+    type: String,
+    required: true
+  },
+  serviceTypes: {
+    type: [String],
     required: true
   },
   scheduledDate: {

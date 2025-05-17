@@ -20,43 +20,86 @@ const ServiceBooking = () => {
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
-  // Fetch user's vehicles
-  useEffect(() => {
-    const fetchVehicles = async () => {
-      try {
-        const userId = localStorage.getItem('userId');
-        const response = await axios.get(`/api/vehicles?userId=${userId}`);
-        setVehicles(response.data);
-      } catch (err) {
-        console.error('Failed to fetch vehicles', err);
-      }
-    };
-    fetchVehicles();
-  }, []);
+  // Fetch user's vehicles on component mount
+ // Update your useEffect for fetching vehicles
+useEffect(() => {
+  const fetchVehicles = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/api/vehicles', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      setVehicles(response.data);
+    } catch (err) {
+      console.error('Failed to fetch vehicles:', err.response?.data || err.message);
+      setErrors(prev => ({ 
+        ...prev, 
+        fetchError: 'Failed to load your vehicles. Please refresh the page.' 
+      }));
+    }
+  };
+  
+  fetchVehicles();
+}, []);
 
+// Update your vehicle selection dropdown in the return statement
+<select
+  name="vehicleId"
+  value={formData.vehicleId}
+  onChange={(e) => {
+    const selectedId = e.target.value;
+    const selectedVehicle = vehicles.find(v => v._id === selectedId);
+    
+    setFormData(prev => ({
+      ...prev,
+      vehicleId: selectedId,
+      vehicleType: selectedVehicle?.type || '',
+      vehicleNumber: selectedVehicle?.registrationNumber || '',
+      vehicleName: selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model}` : ''
+    }));
+  }}
+  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+>
+  <option value="">-- Select Your Vehicle --</option>
+  {vehicles.map((vehicle) => (
+    <option key={vehicle._id} value={vehicle._id}>
+      {vehicle.make} {vehicle.model} ({vehicle.registrationNumber})
+    </option>
+  ))}
+</select>
+
+  // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    
     // Clear error when user types
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
 
+  // Handle service type checkbox changes
   const handleServiceTypeChange = (e) => {
     const { value, checked } = e.target;
     
-    if (checked) {
-      setFormData(prev => ({
+    setFormData(prev => {
+      let newServiceTypes;
+      if (checked) {
+        newServiceTypes = [...prev.serviceTypes, value];
+      } else {
+        newServiceTypes = prev.serviceTypes.filter(type => type !== value);
+      }
+      
+      return {
         ...prev,
-        serviceTypes: [...prev.serviceTypes, value]
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        serviceTypes: prev.serviceTypes.filter(type => type !== value)
-      }));
-    }
+        serviceTypes: newServiceTypes,
+        // Clear otherServiceType if "other" is unchecked
+        otherServiceType: value === 'other' && !checked ? '' : prev.otherServiceType
+      };
+    });
     
     // Clear error when user selects a service type
     if (errors.serviceTypes) {
@@ -64,15 +107,19 @@ const ServiceBooking = () => {
     }
   };
 
+  // Validate form fields
   const validateForm = () => {
     const newErrors = {};
+    
     if (!formData.vehicleType) newErrors.vehicleType = 'Please select a vehicle type';
     if (!formData.vehicleNumber) newErrors.vehicleNumber = 'Vehicle number is required';
     if (!formData.vehicleName) newErrors.vehicleName = 'Vehicle name is required';
     if (!formData.date) newErrors.date = 'Date is required';
     if (!formData.time) newErrors.time = 'Time is required';
-    if (formData.serviceTypes.length === 0) newErrors.serviceTypes = 'Select at least one service type';
-    if (formData.serviceTypes.includes('other') && !formData.otherServiceType) {
+    if (formData.serviceTypes.length === 0) {
+      newErrors.serviceTypes = 'Select at least one service type';
+    }
+    if (formData.serviceTypes.includes('other') && !formData.otherServiceType.trim()) {
       newErrors.otherServiceType = 'Please specify the other service type';
     }
     
@@ -80,46 +127,46 @@ const ServiceBooking = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Handle form submission
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
+  e.preventDefault();
+  
+  if (!validateForm()) return;
 
-    setLoading(true);
-    try {
-      const userId = localStorage.getItem('userId');
-      
-      // Build service types array
-      let finalServiceTypes = formData.serviceTypes.filter(type => type !== 'other');
-      if (formData.serviceTypes.includes('other')) {
-        finalServiceTypes.push(formData.otherServiceType);
+  setLoading(true);
+  setErrors({});
+  
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.post('/api/services', {
+      ...formData,
+      scheduledDate: new Date(`${formData.date}T${formData.time}`).toISOString()
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`
       }
-      
-      const bookingData = {
-        userId,
-        vehicleType: formData.vehicleType,
-        vehicleNumber: formData.vehicleNumber,
-        vehicleName: formData.vehicleName,
-        vehicleId: formData.vehicleId || null,
-        serviceTypes: finalServiceTypes,
-        scheduledDate: new Date(`${formData.date}T${formData.time}`),
-        notes: formData.notes,
-        status: 'pending'
-      };
+    });
 
-      const response = await axios.post('/api/services', bookingData);
-      
+    if (response.data.success) {
       setSuccess('Service booked successfully!');
-      setTimeout(() => navigate('/dashboard/history'), 2000);
-    } catch (err) {
-      console.error('Booking failed:', err);
-      setErrors({ submit: err.response?.data?.message || 'Failed to book service' });
-    } finally {
-      setLoading(false);
+      // Show success message for 3 seconds before redirecting
+      setTimeout(() => navigate('/dashboard/history'), 3000);
+    } else {
+      throw new Error(response.data.error || 'Booking failed');
     }
-  };
+  } catch (err) {
+    console.error('Booking error:', err.response?.data || err.message);
+    setErrors({
+      submit: err.response?.data?.error || 
+             err.response?.data?.message || 
+             'Failed to book service. Please try again.'
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
-  // Available service types
+  // Service type options
   const serviceTypes = [
     { value: 'regular', label: 'Regular Maintenance' },
     { value: 'oil', label: 'Oil Change' },
@@ -129,21 +176,37 @@ const ServiceBooking = () => {
     { value: 'other', label: 'Other Service' }
   ];
 
-  // Vehicle types
+  // Vehicle type options
   const vehicleTypes = [
     { value: 'two-wheeler', label: 'Two Wheeler' },
     { value: 'four-wheeler', label: 'Four Wheeler' },
     { value: 'others', label: 'Others' }
   ];
 
-  // Time slots
+  // Available time slots
   const timeSlots = [
-    '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', 
-    '15:00', '16:00', '17:00', '18:00'
+    '09:00', '10:00', '11:00', '12:00', 
+    '13:00', '14:00', '15:00', '16:00', 
+    '17:00', '18:00'
   ];
 
+  // Pre-fill form if a registered vehicle is selected
+  useEffect(() => {
+    if (formData.vehicleId) {
+      const selectedVehicle = vehicles.find(v => v._id === formData.vehicleId);
+      if (selectedVehicle) {
+        setFormData(prev => ({
+          ...prev,
+          vehicleType: selectedVehicle.type || '',
+          vehicleNumber: selectedVehicle.registrationNumber,
+          vehicleName: `${selectedVehicle.make} ${selectedVehicle.model}`
+        }));
+      }
+    }
+  }, [formData.vehicleId, vehicles]);
+
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6">
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         {/* Form Header */}
         <div className="bg-indigo-600 p-6 text-white">
@@ -158,10 +221,16 @@ const ServiceBooking = () => {
           </div>
         )}
 
-        {/* Error Message */}
+        {/* Error Messages */}
         {errors.submit && (
           <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mx-6 mt-6">
             <p>{errors.submit}</p>
+          </div>
+        )}
+        
+        {errors.fetchError && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mx-6 mt-6">
+            <p>{errors.fetchError}</p>
           </div>
         )}
 
@@ -179,6 +248,7 @@ const ServiceBooking = () => {
               className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                 errors.vehicleType ? 'border-red-500' : 'border-gray-300'
               }`}
+              disabled={!!formData.vehicleId} // Disable if vehicle is selected from registered
             >
               <option value="">-- Select Vehicle Type --</option>
               {vehicleTypes.map((type) => (
@@ -192,8 +262,9 @@ const ServiceBooking = () => {
             )}
           </div>
 
-          {/* Vehicle Details - Number & Name */}
+          {/* Vehicle Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Vehicle Number */}
             <div>
               <label className="block text-gray-700 font-medium mb-2">
                 Vehicle Number <span className="text-red-500">*</span>
@@ -207,11 +278,14 @@ const ServiceBooking = () => {
                 className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                   errors.vehicleNumber ? 'border-red-500' : 'border-gray-300'
                 }`}
+                disabled={!!formData.vehicleId} // Disable if vehicle is selected from registered
               />
               {errors.vehicleNumber && (
                 <p className="mt-1 text-sm text-red-600">{errors.vehicleNumber}</p>
               )}
             </div>
+
+            {/* Vehicle Name */}
             <div>
               <label className="block text-gray-700 font-medium mb-2">
                 Vehicle Name <span className="text-red-500">*</span>
@@ -225,6 +299,7 @@ const ServiceBooking = () => {
                 className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
                   errors.vehicleName ? 'border-red-500' : 'border-gray-300'
                 }`}
+                disabled={!!formData.vehicleId} // Disable if vehicle is selected from registered
               />
               {errors.vehicleName && (
                 <p className="mt-1 text-sm text-red-600">{errors.vehicleName}</p>
@@ -232,7 +307,7 @@ const ServiceBooking = () => {
             </div>
           </div>
 
-          {/* Registered Vehicles (Optional) */}
+          {/* Registered Vehicles Dropdown */}
           <div>
             <label className="block text-gray-700 font-medium mb-2">
               Select from Registered Vehicles (Optional)
@@ -246,16 +321,16 @@ const ServiceBooking = () => {
               <option value="">-- Select Your Vehicle --</option>
               {vehicles.map((vehicle) => (
                 <option key={vehicle._id} value={vehicle._id}>
-                  {vehicle.make} {vehicle.model} ({vehicle.year})
+                  {vehicle.make} {vehicle.model} ({vehicle.registrationNumber})
                 </option>
               ))}
             </select>
             <p className="mt-1 text-sm text-gray-500">
-              If you select a registered vehicle, it will override the details entered above.
+              Selecting a registered vehicle will auto-fill the details above.
             </p>
           </div>
 
-          {/* Service Type */}
+          {/* Service Type Selection */}
           <div>
             <label className="block text-gray-700 font-medium mb-2">
               Service Type <span className="text-red-500">*</span>
@@ -265,14 +340,17 @@ const ServiceBooking = () => {
                 <div key={type.value} className="flex items-center">
                   <input
                     type="checkbox"
-                    id={type.value}
+                    id={`service-${type.value}`}
                     name="serviceTypes"
                     value={type.value}
                     checked={formData.serviceTypes.includes(type.value)}
                     onChange={handleServiceTypeChange}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 rounded"
                   />
-                  <label htmlFor={type.value} className="ml-2 text-gray-700">
+                  <label 
+                    htmlFor={`service-${type.value}`} 
+                    className="ml-2 text-gray-700"
+                  >
                     {type.label}
                   </label>
                 </div>
@@ -282,7 +360,7 @@ const ServiceBooking = () => {
               <p className="mt-1 text-sm text-red-600">{errors.serviceTypes}</p>
             )}
             
-            {/* Other Service Type Field */}
+            {/* Other Service Type Input */}
             {formData.serviceTypes.includes('other') && (
               <div className="mt-3">
                 <input
@@ -302,8 +380,9 @@ const ServiceBooking = () => {
             )}
           </div>
 
-          {/* Date and Time */}
+          {/* Date and Time Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Date Picker */}
             <div>
               <label className="block text-gray-700 font-medium mb-2">
                 Date <span className="text-red-500">*</span>
@@ -322,6 +401,8 @@ const ServiceBooking = () => {
                 <p className="mt-1 text-sm text-red-600">{errors.date}</p>
               )}
             </div>
+            
+            {/* Time Slot Selection */}
             <div>
               <label className="block text-gray-700 font-medium mb-2">
                 Time <span className="text-red-500">*</span>

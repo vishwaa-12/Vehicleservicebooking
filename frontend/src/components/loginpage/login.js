@@ -10,6 +10,8 @@ const LoginPage = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  const ADMIN_EMAIL = 'vehicleservice25@gmail.com'; // Define admin email as constant
+
   const handleSendOtp = async () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('Please enter a valid email address');
@@ -47,9 +49,22 @@ const LoginPage = () => {
       const response = await axios.post('/api/auth/verify-otp', { email, otp });
 
       if (response.data.success) {
+        // Store authentication data
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('userEmail', response.data.user.email);
-        navigate('/dashboard'); // Redirect to dashboard after successful login
+        localStorage.setItem('userRole', response.data.user.role || 'user');
+
+        // Redirect based on role (preferred method)
+        if (response.data.user.role === 'admin') {
+          navigate('/AdminDashboard');
+        } 
+        // Alternatively, check email if role isn't available
+        else if (email.toLowerCase() === ADMIN_EMAIL) {
+          navigate('/AdminDashboard');
+        } 
+        else {
+          navigate('/dashboard');
+        }
       } else {
         setError(response.data.error || 'Invalid OTP');
       }

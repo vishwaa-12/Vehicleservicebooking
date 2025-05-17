@@ -6,6 +6,11 @@ const VehicleSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  type: {
+    type: String,
+    required: true,
+    enum: ['two-wheeler', 'four-wheeler', 'others']
+  },
   make: {
     type: String,
     required: true
@@ -23,12 +28,10 @@ const VehicleSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
-  serviceHistory: [{
-    date: Date,
-    serviceType: String,
-    description: String,
-    cost: Number
-  }]
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
 });
 
 module.exports = mongoose.model('Vehicle', VehicleSchema);
